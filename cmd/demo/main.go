@@ -107,7 +107,18 @@ func testCase3() {
 		{[]byte("7c3002ad756d76a643cb09cd45409608abb642d9"), []byte("7c303333756d777643cb09caaa409608abb642d9"), []byte("2")},
 		{[]byte("7c303333756d777643cb09c999409608abb642d9"), []byte("11113333756d76a643cb09cd45409608abb642d9"), []byte("6")},
 	}
-	want := "b60909382ff2106904a970ee35c83e074def53ff0cdee7b3ca0297807e6bdf0a"
+	want := "eff402b46c2b81e230797cf224c5440aefde9335594271e19da8c75ecc476d08"
+	results := []struct {
+		key []byte
+		val []byte
+	}{
+		{[]byte("7c3002ad756d76a643cb09cd45409608abb642d9"), []byte("8")},
+		{[]byte("7c303333756d555643cb09cd45409608abb642d9"), []byte("20")},
+		{[]byte("7c303333756d777643cb09c999409608abb642d9"), []byte("24")},
+		{[]byte("7c303333756d777643cb09caaa409608abb642d9"), []byte("42")},
+		{[]byte("111102ad756d76a643cb09cd45409608abb642d9"), []byte("50")},
+		{[]byte("11113333756d76a643cb09cd45409608abb642d9"), []byte("6")},
+	}
 
 	t := trie.New()
 	for _, s := range sequence {
@@ -115,23 +126,35 @@ func testCase3() {
 	}
 
 	for _, trx := range transactions {
+		val := new(big.Int)
+		val.SetString(string(trx.val), 10)
+
 		src, ok := t.Get(trx.from)
 		if !ok {
 			panic(fmt.Sprintf("key not found: %s", trx.from))
 		}
-		srcVal := new(big.Int).SetBytes(src)
-		srcVal.Sub(srcVal, new(big.Int).SetBytes(trx.val))
-		t.Put(trx.from, srcVal.Bytes())
+		srcVal := new(big.Int)
+		srcVal.SetString(string(src), 10)
+		srcVal.Sub(srcVal, val)
+		t.Put(trx.from, []byte(srcVal.Text(10)))
 
 		dst, ok := t.Get(trx.to)
-		dstVal := new(big.Int)
-		if !ok {
-			dstVal.SetBytes(trx.val)
-		} else {
-			dstVal = new(big.Int).SetBytes(dst)
-			dstVal.Add(dstVal, new(big.Int).SetBytes(trx.val))
+		dstVal := big.NewInt(0)
+		if ok {
+			dstVal.SetString(string(dst), 10)
 		}
-		t.Put(trx.to, dstVal.Bytes())
+		dstVal.Add(dstVal, val)
+		t.Put(trx.to, []byte(dstVal.Text(10)))
+	}
+
+	for _, r := range results {
+		got, ok := t.Get(r.key)
+		if !ok {
+			panic(fmt.Sprintf("key not found: %s", r.key))
+		}
+		if string(got) != string(r.val) {
+			panic(fmt.Sprintf("value mismatch: %s != %s", got, r.val))
+		}
 	}
 
 	got := fmt.Sprintf("%x", t.Hash())
